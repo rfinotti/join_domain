@@ -41,7 +41,7 @@ install_dependencies() {
 # Prompt user for domain admin user, password, and domain to join
 read -p "Enter Domain Admin user: " domain_admin_user
 echo
-read -p "Enter Domain to join: " domain_to_join
+read -p "Enter Domain to join (must be writtend in capital letters): " domain_to_join
 
 # Check if already joined to the domain
 if realm list | grep -q "$domain_to_join"; then
@@ -61,19 +61,7 @@ if ping -c 1 "$domain_to_join" &> /dev/null; then
   sudo sh -c "echo \"default_realm = $domain_to_join\" > /etc/krb5.conf"
 
   # Join the domain
-  sudo realm join --user="$domain_admin_user $domain_to_join"
-  
-  # Verify ID and attributes from the domain controller
-  id "$domain_admin_user@$domain_to_join"
-  
-  # Edit SSSD configuration
-  sudo sh -c "echo -e \"[sssd]\ndomains = $domain_to_join\nconfig_file_version = 2\nservices = nss, pam\nuse_fully_qualified_names = False\" > /etc/sssd/sssd.conf"
-
-  # Restart SSSD service
-  sudo service sssd restart
-
-  # Create home directory for the user
-  echo "session optional pam_mkhomedir.so skel=/etc/skel umask=077" | sudo tee -a /etc/pam.d/common-session
+  sudo realm join --user="$domain_admin_user@$domain_to_join $domain_to_join"
 
   # Ask user if they know who will use this PC
   read -p "Do you already know who will use this PC? (y/n): " knows_user
@@ -100,7 +88,17 @@ if ping -c 1 "$domain_to_join" &> /dev/null; then
     fi
   fi
 
-  echo "Domain Joined."
+  # Create home directory for the user
+  echo "session optional pam_mkhomedir.so skel=/etc/skel umask=077" | sudo tee -a /etc/pam.d/common-session
+
+  # Edit SSSD configuration
+  sudo sed -i "s/use_fully_qualified_names = True/use_fully_qualified_names = False/" /etc/sssd/sssd.conf
+
+  # Edit user lookup in NSSWITCH.CONF
+  sudo sed -i "s/passwd: files systemd/passwd: compat sss systemd/" /etc/nsswitch.conf
+
+  # Restart SSSD service
+  sudo service sssd restart
 
 else
   echo "Not connected to the domain network."
