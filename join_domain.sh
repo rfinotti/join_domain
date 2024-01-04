@@ -36,14 +36,14 @@ read -s -p "Enter Domain Admin password: " domain_admin_password
 echo
 read -p "Enter Domain to join: " domain_to_join
 
+# Perform dependency check and install
+install_dependencies
+realm discover $domain_to_join
 
 # Check domain network connectivity
 if ping -c 1 "$domain_to_join" &> /dev/null; then
   echo "Connected to the domain network."
-  
-  # Perform dependency check and install
-  install_dependencies  
-  
+
   # Edit Kerberos configuration
   sudo sh -c "echo \"default_realm = $domain_to_join\" > /etc/krb5.conf"
 
