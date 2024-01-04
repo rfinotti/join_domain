@@ -1,6 +1,6 @@
  # Join Domain Script
 
-This script automates the process of joining a Linux machine to a Windows Active Directory domain. It is specifically designed for Linux Mint 21.1 and provides an interactive setup for domain join, user configuration, and other related tasks.
+This script automates the process of joining a Linux machine to a Windows Active Directory domain. It is specifically designed for Linux bases OS (Desktop and Server) and provides an interactive setup for domain join, user configuration, and other related tasks.
 
 ## Table of Contents
 - [Features](#features)
@@ -20,7 +20,7 @@ This script automates the process of joining a Linux machine to a Windows Active
 
 ## Prerequisites
 
-- Linux Mint 21.1
+- Linux based OS
 - Sudo privileges
 - Active Directory domain details (admin user, password, domain name)
 - Internal DNS IP address for domain resolution
