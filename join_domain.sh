@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#Script crated by Riccardo Finotti
 # Log file
 log_file="join_domain.log"
 
@@ -18,23 +18,36 @@ check_domain_resolution() {
   fi
 }
 
-# Install required packages if not already installed
 install_dependencies() {
   local dependencies=("realmd" "sssd" "sssd-tools" "libnss-sss" "libpam-sss" "adcli" "samba-common-bin" "oddjob" "oddjob-mkhomedir" "packagekit")
 
   for dep in "${dependencies[@]}"; do
     if ! dpkg -s "$dep" &> /dev/null; then
-      sudo apt-get update
-      sudo apt-get install -y "$dep"
+      echo "Installing $dep..."
+      if ! sudo apt-get update; then
+        echo "Failed to update package lists."
+        exit 1
+      fi
+      if ! sudo apt-get install -y "$dep"; then
+        echo "Failed to install $dep."
+        exit 1
+      fi
+    else
+      echo "$dep is already installed."
     fi
   done
 }
 
 # Prompt user for domain admin user, password, and domain to join
 read -p "Enter Domain Admin user: " domain_admin_user
-read -s -p "Enter Domain Admin password: " domain_admin_password
 echo
 read -p "Enter Domain to join: " domain_to_join
+
+# Check if already joined to the domain
+if realm list | grep -q "$domain_to_join"; then
+  echo "Already joined to $domain_to_join."
+  exit 0
+fi
 
 # Perform dependency check and install
 install_dependencies
