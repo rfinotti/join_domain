@@ -61,7 +61,7 @@ if ping -c 1 "$domain_to_join" &> /dev/null; then
   sudo sh -c "echo \"default_realm = $domain_to_join\" > /etc/krb5.conf"
 
   # Join the domain
-  sudo realm join --user="$domain_admin_user@$domain_to_join" "$domain_to_join"
+  sudo realm join --user="$domain_admin_user $domain_to_join"
   
   # Verify ID and attributes from the domain controller
   id "$domain_admin_user@$domain_to_join"
