@@ -1,51 +1,55 @@
 #!/bin/bash
-#Script crated by Riccardo Finotti
-# Log file
-log_file="join_domain.log"
+# Script created by Riccardo Finotti
 
-# Check if a domain controller is resolvable
-check_domain_resolution() {
-  local domain_controller_fqdn="$domain_to_join"
-  
-  if ! host "$domain_controller_fqdn" &> /dev/null; then
-    echo "Error: Domain controller ($domain_controller_fqdn) is not resolvable."
-    read -p "Enter the primary internal DNS IP address: " dns_ip
-    echo "# Domain Controller ipv4:" | sudo tee -a /etc/hosts
-    echo "$dns_ip $domain_to_join" | sudo tee -a /etc/hosts
-    echo "Added $domain_to_join with IP $dns_ip to /etc/hosts." >> "$log_file"
-  else
-    echo "Domain controller is resolvable."
-  fi
+# Log files
+error_log="join_error.log"
+run_log="join_run.log"
+
+# Function to log messages
+log_message() {
+  local log_file="$1"
+  local message="$2"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | sudo tee -a "$log_file"
 }
 
+# Function to handle errors
+handle_error() {
+  local error_message="$1"
+  log_message "$error_log" "Error: $error_message"
+  log_message "$run_log" "Script execution failed. See $error_log for details."
+  exit 1
+}
+
+# Function to install dependencies
 install_dependencies() {
   local dependencies=("realmd" "sssd" "sssd-tools" "libnss-sss" "libpam-sss" "adcli" "samba-common-bin" "oddjob" "oddjob-mkhomedir" "packagekit")
 
   for dep in "${dependencies[@]}"; do
     if ! dpkg -s "$dep" &> /dev/null; then
-      echo "Installing $dep..."
+      log_message "$run_log" "Installing $dep..."
       if ! sudo apt-get update; then
-        echo "Failed to update package lists."
-        exit 1
+        handle_error "Failed to update package lists."
       fi
       if ! sudo apt-get install -y "$dep"; then
-        echo "Failed to install $dep."
-        exit 1
+        handle_error "Failed to install $dep."
       fi
     else
-      echo "$dep is already installed."
+      log_message "$run_log" "$dep is already installed."
     fi
   done
 }
 
+# Create run log
+log_message "$run_log" "Script execution started."
+
 # Prompt user for domain admin user, password, and domain to join
 read -p "Enter Domain Admin user: " domain_admin_user
 echo
-read -p "Enter Domain to join (must be writtend in capital letters): " domain_to_join
+read -p "Enter Domain to join (must be written in capital letters): " domain_to_join
 
 # Check if already joined to the domain
 if realm list | grep -q "$domain_to_join"; then
-  echo "Already joined to $domain_to_join."
+  log_message "$run_log" "Already joined to $domain_to_join."
   exit 0
 fi
 
@@ -55,13 +59,15 @@ realm discover $domain_to_join
 
 # Check domain network connectivity
 if ping -c 1 "$domain_to_join" &> /dev/null; then
-  echo "Connected to the domain network."
+  log_message "$run_log" "Connected to the domain network."
 
   # Edit Kerberos configuration
   sudo sh -c "echo \"default_realm = $domain_to_join\" > /etc/krb5.conf"
 
   # Join the domain
-  sudo realm join --user="$domain_admin_user@$domain_to_join $domain_to_join"
+  if ! sudo realm join --user="$domain_admin_user@$domain_to_join $domain_to_join"; then
+    handle_error "Failed to join the domain."
+  fi
 
   # Ask user if they know who will use this PC
   read -p "Do you already know who will use this PC? (y/n): " knows_user
@@ -84,7 +90,7 @@ if ping -c 1 "$domain_to_join" &> /dev/null; then
       # Add user to sudo and root groups
       sudo usermod -aG sudo "$username"
       sudo usermod -aG root "$username"
-      echo "$name is now an administrator of the PC."
+      log_message "$run_log" "$name is now an administrator of the PC."
     fi
   fi
 
@@ -94,14 +100,23 @@ if ping -c 1 "$domain_to_join" &> /dev/null; then
   # Edit SSSD configuration
   sudo sed -i "s/use_fully_qualified_names = True/use_fully_qualified_names = False/" /etc/sssd/sssd.conf
 
+  # Edit the workgroup smb.conf
+  sudo sed -i "s/workgroup = WORKGROUP/workgroup = $domain_to_join/" /etc/samba/smb.conf
+
   # Edit user lookup in NSSWITCH.CONF
   sudo sed -i "s/passwd: files systemd/passwd: compat sss systemd/" /etc/nsswitch.conf
 
   # Restart SSSD service
-  sudo service sssd restart
+  if ! sudo service sssd restart; then
+    handle_error "Failed to restart SSSD service."
+  fi
 
 else
-  echo "Not connected to the domain network."
+  log_message "$run_log" "Not connected to the domain network."
   check_domain_resolution
-  echo "Domain Join failed. See $log_file for details."
+  handle_error "Domain Join failed."
 fi
+
+# Log success and exit
+log_message "$run_log" "Script execution completed successfully."
+exit 0
